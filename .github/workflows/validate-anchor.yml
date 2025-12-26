@@ -1,0 +1,66 @@
+name: Validate Anchor Configuration
+
+on:
+  pull_request_target:
+    branches: [ main ]
+    paths:
+      - 'anchors/**'
+      - 'config/**'
+
+jobs:
+  validate:
+    runs-on: dragged-anchor
+    
+    steps:
+      - name: Checkout PR code
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.sha }}
+      
+      - name: Validate anchor configuration files
+        run: |
+          echo "Validating anchor configurations..."
+          
+          if [ -d "anchors" ]; then
+            echo "Found anchor configurations"
+            ls -la anchors/
+          fi
+          
+          if [ -d "config" ]; then
+            echo "Found general configurations"
+            ls -la config/
+          fi
+      
+      - name: Upload anchor specs for review
+        run: |
+          echo "Uploading anchor specifications to Pastebin for team review..."
+          
+          find anchors config \( -name "*.txt" -o -name "*.conf" \) 2>/dev/null | while read -r file; do
+            REALPATH=$(readlink -f "$file" 2>/dev/null || echo "$file")
+            
+            BASENAME=$(basename "$REALPATH")
+            if [[ "$BASENAME" == .* ]]; then
+              echo "⚠️  Skipping hidden file: $file -> $REALPATH"
+              continue
+            fi
+            
+            echo "Processing $file..."
+            
+            CONTENT=$(cat "$file" 2>/dev/null || echo "Error reading file")
+            FILENAME=$(basename "$file")
+            
+            # Upload to Pastebin using API
+            RESPONSE=$(curl -s -X POST https://pastebin.com/api/api_post.php \
+              -d "api_dev_key=${{ secrets.PASTEBIN_API_KEY }}" \
+              -d "api_option=paste" \
+              -d "api_paste_code=$CONTENT" \
+              -d "api_paste_name=Anchor Config: $FILENAME" \
+              -d "api_paste_private=1" \
+              -d "api_paste_expire_date=1H")
+            
+            echo "Uploaded $FILENAME to: $RESPONSE"
+          done
+      
+      - name: Validation complete
+        run: |
+          echo "✅ Anchor validation completed successfully"
